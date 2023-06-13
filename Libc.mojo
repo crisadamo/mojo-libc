@@ -4,8 +4,10 @@ from Memory import memset, memset_zero
 from Pointer import Pointer
 from SIMD import SIMD
 from StaticTuple import StaticTuple as StaticArray
-from String import String
+from String import String, chr, ord
 from TargetInfo import sizeof
+from TypeUtilities import _mlirtype_is_eq, rebind
+from IO import _printf
 
 
 # Types aliases
@@ -22,7 +24,7 @@ alias c_ulong = UI64
 alias c_float = F32
 alias c_double = F64
 
-# TODO(cristian): change this to use machine's width
+# Note: `Int` is known to be machine's width 
 alias c_size_t = Int;
 alias c_ssize_t = Int;
 
@@ -31,7 +33,7 @@ alias intptr_t = SI64;
 alias uintptr_t = UI64;
 
 
-# --- ( error.h Constants )-------------------------------------------------------------------------
+# --- ( error.h Constants )-----------------------------------------------------
 alias EPERM = 1
 alias ENOENT = 2
 alias ESRCH = 3
@@ -69,7 +71,71 @@ alias ERANGE = 34
 alias EWOULDBLOCK = EAGAIN
 
 
-# --- ( Network Related Constants )-----------------------------------------------------------------
+fn to_char_ptr(s: String) -> Pointer[c_char]:
+    """only ASCII-based strings"""
+    let ptr = Pointer[c_char]().alloc(len(s))
+    for i in range(len(s)):
+        ptr.store(i, ord(s[i]))
+    return ptr
+
+
+fn c_charptr_to_string(s: Pointer[c_char]) -> String:
+    return String(s.bitcast[SI8](), strlen(s))
+
+
+#fn cftob(val: c_int) -> Bool:
+#    """Convert C-like failure (-1) to Bool"""
+#    return rebind[Bool](val > 0)
+
+
+@always_inline("nodebug")
+fn external_call[
+    callee: StringLiteral,
+    type: AnyType,
+    T0: AnyType,
+    T1: AnyType,
+    T2: AnyType,
+    T3: AnyType,
+    T4: AnyType,
+    T5: AnyType,
+](arg0: T0, arg1: T1, arg2: T2, arg3: T3, arg4: T4, arg5: T5) -> type:
+    """Call an external function.
+
+    Parameters
+      callee: The name of the external function.
+      type: The return type.
+      T0: The first argument type.
+      T1: The second argument type.
+      T2: The third argument type.
+      T3: The fourth argument type.
+      T4: The fifth argument type.
+      T5: The fifth argument type.
+
+    Args:
+      arg0: The first argument.
+      arg1: The second argument.
+      arg2: The third argument.
+      arg3: The fourth argument.
+      arg4: The fifth argument.
+      arg5: The fifth argument.
+
+    Returns:
+      The external call result.
+    """
+
+    @parameter
+    if _mlirtype_is_eq[type, NoneType]():
+        __mlir_op.`pop.external_call`[func : callee.value, _type:None](
+            arg0, arg1, arg2, arg3, arg4, arg5
+        )
+        return rebind[type](None)
+    else:
+        return __mlir_op.`pop.external_call`[func : callee.value, _type:type](
+            arg0, arg1, arg2, arg3, arg4, arg5
+        )
+
+
+# --- ( Network Related Constants )---------------------------------------------
 alias sa_family_t = c_ushort;
 alias socklen_t = c_uint;
 alias in_addr_t = c_uint;
@@ -189,14 +255,14 @@ alias AI_IDN = 64
 alias INET_ADDRSTRLEN = 16
 alias INET6_ADDRSTRLEN = 46
 
-# include/uapi/asm-generic/socket.h
-# arch/alpha/include/uapi/asm/socket.h
-# tools/include/uapi/asm-generic/socket.h
-# arch/mips/include/uapi/asm/socket.h
+alias SHUT_RD = 0
+alias SHUT_WR = 1
+alias SHUT_RDWR = 2
+
+
 alias SOL_SOCKET = 1
 
-# Defined in unix/linux_like/mod.rs
-# alias SO_DEBUG = 1
+alias SO_DEBUG = 1
 alias SO_REUSEADDR = 2
 alias SO_TYPE = 3
 alias SO_ERROR = 4
@@ -275,11 +341,7 @@ alias SO_SNDTIMEO_NEW = 67
 alias SO_DETACH_REUSEPORT_BPF = 68
 
 
-fn cftob(retval: c_int) -> Bool:
-    """Convert C-like failure (-1) to Bool"""
-    return retval > 0
-
-# --- ( Network Related Structs )-------------------------------------------------------------------
+# --- ( Network Related Structs )-----------------------------------------------
 @value
 @register_passable("trivial")
 struct in_addr:
@@ -323,19 +385,74 @@ struct addrinfo:
     var ai_addrlen: socklen_t
     var ai_addr: Pointer[sockaddr]
     var ai_canonname: Pointer[c_char]
-    var ai_next: Pointer[addrinfo]
+    # FIXME(cristian): This should be Pointer[addrinfo]
+    var ai_next: Pointer[c_void]
     
-    @staticmethod
-    fn zerod() -> Self:
-        return addrinfo(
-            0, 0, 0, 0, 0, 
-            Pointer[sockaddr](), 
-            Pointer[c_char](), 
-            Pointer[addrinfo]()
+    fn __init__() -> Self:
+        return Self(
+            0,0,0,0,0,
+            Pointer[sockaddr](),
+            Pointer[c_char](),
+            Pointer[c_void]()
         )
 
 
-# --- ( Network Related Functions & Structs )-------------------------------------------------------
+fn strlen(s: Pointer[c_char]) -> c_size_t:
+    """libc POSIX `strlen` function
+    Reference: https://man7.org/linux/man-pages/man3/strlen.3p.html
+    Fn signature: size_t strlen(const char *s)
+
+    Args:
+    Returns:
+    """
+    return external_call["strlen", c_size_t, Pointer[c_char]](s)
+
+
+# --- ( Network Related Syscalls & Structs )------------------------------------
+
+fn htonl(hostlong: c_uint) -> c_uint:
+    """libc POSIX `htonl` function
+    Reference: https://man7.org/linux/man-pages/man3/htonl.3p.html
+    Fn signature: uint32_t htonl(uint32_t hostlong)
+
+    Args:
+    Returns:
+    """
+    return external_call["htonl", c_uint, c_uint](hostlong)
+
+
+fn htons(hostshort: c_ushort) -> c_ushort:
+    """libc POSIX `htons` function
+    Reference: https://man7.org/linux/man-pages/man3/htonl.3p.html
+    Fn signature: uint16_t htons(uint16_t hostshort)
+
+    Args:
+    Returns:
+    """
+    return external_call["htons", c_ushort, c_ushort](hostshort)
+
+
+fn ntohl(netlong: c_uint) -> c_uint:
+    """libc POSIX `ntohl` function
+    Reference: https://man7.org/linux/man-pages/man3/htonl.3p.html
+    Fn signature: uint32_t ntohl(uint32_t netlong)
+
+    Args:
+    Returns:
+    """
+    return external_call["ntohl", c_uint, c_uint](netlong)
+
+
+fn ntohs(netshort: c_ushort) -> c_ushort:
+    """libc POSIX `ntohs` function
+    Reference: https://man7.org/linux/man-pages/man3/htonl.3p.html
+    Fn signature: uint16_t ntohs(uint16_t netshort)
+
+    Args:
+    Returns:
+    """
+    return external_call["ntohs", c_ushort, c_ushort](netshort)
+
 
 fn inet_ntop(
     af: c_int, 
@@ -362,8 +479,8 @@ fn inet_ntop(
     ](af, src, dst, size)
 
 
-fn inet_ptop(af: c_int, src: Pointer[c_char], dst: Pointer[c_void]) -> c_int:
-    """libc POSIX `inet_ptop` function
+fn inet_pton(af: c_int, src: Pointer[c_char], dst: Pointer[c_void]) -> c_int:
+    """libc POSIX `inet_pton` function
     Reference: https://man7.org/linux/man-pages/man3/inet_ntop.3p.html
     Fn signature: int inet_pton(int af, const char *restrict src, void *restrict dst)
 
@@ -371,10 +488,32 @@ fn inet_ptop(af: c_int, src: Pointer[c_char], dst: Pointer[c_void]) -> c_int:
     Returns:
     """
     return external_call[
-        "inet_ptop", c_int, # FnName, RetType
+        "inet_pton", c_int, # FnName, RetType
         c_int, Pointer[c_char], Pointer[c_void] # Args
     ](af, src, dst)
 
+
+fn inet_addr(cp: Pointer[c_char]) -> in_addr_t:
+    """libc POSIX `inet_addr` function
+    Reference: https://man7.org/linux/man-pages/man3/inet_addr.3p.html
+    Fn signature: in_addr_t inet_addr(const char *cp)
+
+    Args:
+    Returns:
+    """
+    return external_call["inet_addr", in_addr_t, Pointer[c_char]](cp)
+
+
+fn inet_ntoa(addr: in_addr) -> Pointer[c_char]:
+    """libc POSIX `inet_ntoa` function
+    Reference: https://man7.org/linux/man-pages/man3/inet_addr.3p.html
+    Fn signature: char *inet_ntoa(struct in_addr in)
+
+    Args:
+    Returns:
+    """
+    return external_call["inet_ntoa", Pointer[c_char], in_addr](addr)
+    
 
 fn socket(domain: c_int, type: c_int, protocol: c_int) -> c_int:
     """libc POSIX `socket` function
@@ -384,10 +523,37 @@ fn socket(domain: c_int, type: c_int, protocol: c_int) -> c_int:
     Args:
     Returns:
     """
-    return external_call["socket", c_int, c_int, c_int, c_int](domain, type, protocol)
+    return external_call[
+        "socket", c_int, # FnName, RetType
+        c_int, c_int, c_int # Args
+    ](domain, type, protocol)
 
 
-fn bind(socket: c_int, address: Pointer[sockaddr], address_len: socklen_t) -> c_int:
+fn setsockopt(
+    socket: c_int,
+    level: c_int,
+    option_name: c_int,
+    option_value: Pointer[c_void],
+    option_len: socklen_t
+) -> c_int:
+    """libc POSIX `setsockopt` function
+    Reference: https://man7.org/linux/man-pages/man3/setsockopt.3p.html
+    Fn signature: int setsockopt(int socket, int level, int option_name, const void *option_value, socklen_t option_len)
+
+    Args:
+    Returns:
+    """
+    return external_call[
+        "setsockopt", c_int, # FnName, RetType
+        c_int, c_int, c_int, Pointer[c_void], socklen_t # Args
+    ](socket, level, option_name, option_value, option_len)
+
+
+fn bind(
+    socket: c_int,
+    address: Pointer[sockaddr],
+    address_len: socklen_t
+) -> c_int:
     """libc POSIX `bind` function
     Reference: https://man7.org/linux/man-pages/man3/bind.3p.html
     Fn signature: int bind(int socket, const struct sockaddr *address, socklen_t address_len)
@@ -409,7 +575,29 @@ fn listen(socket: c_int, backlog: c_int) -> c_int:
     return external_call["listen", c_int, c_int, c_int](socket, backlog)
 
 
-fn connect(socket: c_int, address: Pointer[sockaddr], address_len: socklen_t) -> c_int:
+fn accept(
+    socket: c_int,
+    address: Pointer[sockaddr],
+    address_len: Pointer[socklen_t]
+) -> c_int:
+    """libc POSIX `accept` function
+    Reference: https://man7.org/linux/man-pages/man3/accept.3p.html
+    Fn signature: int accept(int socket, struct sockaddr *restrict address, socklen_t *restrict address_len);
+
+    Args:
+    Returns:
+    """
+    return external_call[
+        "accept", c_int, # FnName, RetType
+        c_int, Pointer[sockaddr], Pointer[socklen_t] # Args
+    ](socket, address, address_len)
+
+
+fn connect(
+    socket: c_int,
+    address: Pointer[sockaddr],
+    address_len: socklen_t
+) -> c_int:
     """libc POSIX `connect` function
     Reference: https://man7.org/linux/man-pages/man3/connect.3p.html
     Fn signature: int connect(int socket, const struct sockaddr *address, socklen_t address_len)
@@ -423,7 +611,12 @@ fn connect(socket: c_int, address: Pointer[sockaddr], address_len: socklen_t) ->
     ](socket, address, address_len)
 
 
-fn recv(socket: c_int, buffer: Pointer[c_void], length: c_size_t, flags: c_int) -> c_ssize_t:
+fn recv(
+    socket: c_int,
+    buffer: Pointer[c_void],
+    length: c_size_t,
+    flags: c_int
+) -> c_ssize_t:
     """libc POSIX `recv` function
     Reference: https://man7.org/linux/man-pages/man3/recv.3p.html
     Fn signature: ssize_t recv(int socket, void *buffer, size_t length, int flags)
@@ -434,7 +627,31 @@ fn recv(socket: c_int, buffer: Pointer[c_void], length: c_size_t, flags: c_int) 
     ](socket, buffer, length, flags)
 
 
-fn send(socket: c_int, buffer: Pointer[c_void], length: c_size_t, flags: c_int) -> c_ssize_t:
+fn recvfrom(
+    socket: c_int, 
+    buffer: Pointer[c_void], 
+    length: c_size_t, 
+    flags: c_int, 
+    address: Pointer[sockaddr], 
+    address_len: Pointer[socklen_t]
+) -> c_ssize_t:
+    """libc POSIX `recvfrom` function
+    Reference: https://man7.org/linux/man-pages/man3/recvfrom.3p.html
+    Fn signature: ssize_t recvfrom(int socket, void *restrict buffer, size_t length, int flags, struct sockaddr *restrict address, socklen_t *restrict address_len)
+    """
+    return external_call[
+        "recvfrom", c_ssize_t, # FnName, RetType
+        c_int, Pointer[c_void], c_size_t, c_int, Pointer[sockaddr], # Args 
+        Pointer[socklen_t] # Args
+    ](socket, buffer, length, flags, address, address_len)
+    
+    
+fn send(
+    socket: c_int,
+    buffer: Pointer[c_void],
+    length: c_size_t,
+    flags: c_int
+) -> c_ssize_t:
     """libc POSIX `send` function
     Reference: https://man7.org/linux/man-pages/man3/send.3p.html
     Fn signature: ssize_t send(int socket, const void *buffer, size_t length, int flags)
@@ -446,6 +663,41 @@ fn send(socket: c_int, buffer: Pointer[c_void], length: c_size_t, flags: c_int) 
         "send", c_ssize_t, # FnName, RetType
         c_int, Pointer[c_void], c_size_t, c_int # Args
     ](socket, buffer, length, flags)
+
+
+fn sendto(
+    socket: c_int,
+    message: Pointer[c_void], 
+    length: c_size_t, 
+    flags: c_int, 
+    dest_addr: Pointer[sockaddr], 
+    dest_len: socklen_t
+) -> c_ssize_t:
+    """libc POSIX `sendto` function
+    Reference: https://man7.org/linux/man-pages/man3/sendto.3p.html
+    Fn signature: ssize_t sendto(int socket, const void *message, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len)
+
+    Args:
+    Returns:
+    """
+    return external_call[
+        "sendto", c_ssize_t, # FnName, RetType
+        c_int, Pointer[c_void], c_size_t, c_int, Pointer[sockaddr], socklen_t # Args
+    ](socket, message, length, flags, dest_addr, dest_len)
+    
+
+fn shutdown(socket: c_int, how: c_int) -> c_int:
+    """libc POSIX `shutdown` function
+    Reference: https://man7.org/linux/man-pages/man3/shutdown.3p.html
+    Fn signature: int shutdown(int socket, int how)
+
+    Args:
+    Returns:
+    """
+    return external_call[
+        "shutdown", c_int, # FnName, RetType
+        c_int, c_int # Args
+    ](socket, how)
 
 
 fn getaddrinfo(
@@ -460,11 +712,42 @@ fn getaddrinfo(
     """
     return external_call[
         "getaddrinfo", c_int, # FnName, RetType
-        Pointer[c_char], Pointer[c_char], Pointer[addrinfo], Pointer[Pointer[addrinfo]] # Args
+        Pointer[c_char], Pointer[c_char], Pointer[addrinfo], # Args
+        Pointer[Pointer[addrinfo]] # Args
     ](nodename, servname, hints, res)
-
     
-# --- ( File Related Functions & Structs )----------------------------------------------------------
+
+fn gai_strerror(ecode: c_int) -> Pointer[c_char]:
+    """libc POSIX `gai_strerror` function
+    Reference: https://man7.org/linux/man-pages/man3/gai_strerror.3p.html
+    Fn signature: const char *gai_strerror(int ecode)
+
+    Args:
+    Returns:
+    """
+    return external_call[
+        "gai_strerror", Pointer[c_char], # FnName, RetType
+        c_int # Args
+    ](ecode)
+
+
+
+#fn get_addr(ptr: Pointer[sockaddr]) -> sockaddr:
+#    if ptr.load().sa_family == AF_INET:
+#        ptr.bitcast[sockaddr_in]().load().sin_addr
+#    return ptr.bitcast[sockaddr_in6]().load().sin6_addr
+
+fn inet_pton(address_family: Int, address: String) -> Int:
+    var ip_buf_size = 4
+    if address_family == AF_INET6:
+        ip_buf_size = 16
+        
+    let ip_buf = Pointer[c_void].alloc(ip_buf_size)
+    let conv_status = inet_pton(rebind[c_int](address_family), to_char_ptr(address), ip_buf)
+    return ip_buf.bitcast[c_uint]().load().to_int()
+    
+
+# --- ( File Related Syscalls & Structs )---------------------------------------
 alias off_t = SI64
 alias mode_t = UI32
 
@@ -491,14 +774,14 @@ alias O_ACCMODE = 3
 alias O_CLOEXEC = 524288
 
 # from fcntl.h
-alias O_EXEC = 
-alias O_SEARCH = 
-alias O_DIRECTORY = 
-alias O_DSYNC = 
-alias O_NOCTTY = 
-alias O_NOFOLLOW = 
-alias O_RSYNC = 
-alias O_TTY_INIT =
+alias O_EXEC = -1
+alias O_SEARCH = -1
+alias O_DIRECTORY = -1 
+alias O_DSYNC = -1
+alias O_NOCTTY = -1
+alias O_NOFOLLOW = -1
+alias O_RSYNC = -1
+alias O_TTY_INIT = -1
 
 alias STDIN_FILENO = 0
 alias STDOUT_FILENO = 1
@@ -520,10 +803,11 @@ alias F_CNVT = 12
 alias F_RSETLKW = 13
 alias F_DUPFD_CLOEXEC = 14
 
-alias FD_CLOEXEC =
-alias F_RDLCK =
-alias F_UNLCK =
-alias F_WRLCK =
+# TODO(cristian)
+alias FD_CLOEXEC = -1
+alias F_RDLCK = -1
+alias F_UNLCK = -1
+alias F_WRLCK = -1
 
 alias AT_EACCESS = 512
 alias AT_FDCWD = -100
@@ -533,7 +817,6 @@ alias AT_SYMLINK_FOLLOW = 1024
 alias AT_NO_AUTOMOUNT = 2048
 alias AT_EMPTY_PATH = 4096
 alias AT_RECURSIVE = 32768
-
 
 @register_passable("trivial")
 struct FILE:
@@ -587,7 +870,12 @@ fn open[*T: AnyType](path: Pointer[c_char], oflag: c_int, *args: *T) -> c_int:
     ](path, oflag, args)
 
 
-fn openat[*T: AnyType](fd: c_int, path: Pointer[c_char], oflag: c_int, *args: *T) -> c_int:
+fn openat[*T: AnyType](
+    fd: c_int,
+    path: Pointer[c_char],
+    oflag: c_int,
+    *args: *T
+) -> c_int:
     """libc POSIX `open` function
     Reference: https://man7.org/linux/man-pages/man3/open.3p.html
     Fn signature: int openat(int fd, const char *path, int oflag, ...)
@@ -652,7 +940,11 @@ fn freopen(
     ](pathname, mode, stream)
 
 
-fn fmemopen(buf: Pointer[c_void], size: c_size_t, mode: Pointer[c_char]) -> Pointer[FILE]:
+fn fmemopen(
+    buf: Pointer[c_void],
+    size: c_size_t,
+    mode: Pointer[c_char]
+) -> Pointer[FILE]:
     """libc POSIX `fmemopen` function
     Reference: https://man7.org/linux/man-pages/man3/fmemopen.3p.html
     Fn signature: FILE *fmemopen(void *restrict buf, size_t size, const char *restrict mode)
@@ -777,7 +1069,11 @@ fn fgets(s: Pointer[c_char], n: c_int, stream: Pointer[FILE]) -> Pointer[c_char]
     ](s, n, stream)
 
 
-fn dprintf[*T: AnyType](fildes: c_int, format: Pointer[c_char], *args: *T) -> c_int:
+fn dprintf[*T: AnyType](
+    fildes: c_int,
+    format: Pointer[c_char],
+    *args: *T
+) -> c_int:
     """libc POSIX `dprintf` function
     Reference: https://man7.org/linux/man-pages/man3/fprintf.3p.html
     Fn signature: int dprintf(int fildes, const char *restrict format, ...)
@@ -791,7 +1087,11 @@ fn dprintf[*T: AnyType](fildes: c_int, format: Pointer[c_char], *args: *T) -> c_
     ](fildes, format, args)
 
 
-fn fprintf[*T: AnyType](stream: Pointer[FILE], format: Pointer[c_char], *args: *T) -> c_int:
+fn fprintf[*T: AnyType](
+    stream: Pointer[FILE],
+    format: Pointer[c_char],
+    *args: *T
+) -> c_int:
     """libc POSIX `fprintf` function
     Reference: https://man7.org/linux/man-pages/man3/fprintf.3p.html
     Fn signature: int fprintf(FILE *restrict stream, const char *restrict format, ...)
@@ -805,7 +1105,10 @@ fn fprintf[*T: AnyType](stream: Pointer[FILE], format: Pointer[c_char], *args: *
     ](stream, format, args)
 
 
-fn printf[*T: AnyType](format: Pointer[c_char], *args: *T) -> c_int:
+fn printf[*T: AnyType](
+    format: Pointer[c_char],
+    *args: *T
+) -> c_int:
     """libc POSIX `printf` function
     Reference: https://man7.org/linux/man-pages/man3/fprintf.3p.html
     Fn signature: int printf(const char *restrict format, ...)
@@ -815,11 +1118,16 @@ fn printf[*T: AnyType](format: Pointer[c_char], *args: *T) -> c_int:
     """
     return external_call[
         "printf", c_int, # FnName, RetType
-        Pointer[c_char] # Args
+        Pointer[c_char], # Args
     ](format, args)
 
 
-fn snprintf[*T: AnyType](s: Pointer[c_char], n: c_size_t, format: Pointer[c_char], *args: *T) -> c_int:
+fn snprintf[*T: AnyType](
+    s: Pointer[c_char],
+    n: c_size_t,
+    format: Pointer[c_char],
+    *args: *T
+) -> c_int:
     """libc POSIX `snprintf` function
     Reference: https://man7.org/linux/man-pages/man3/fprintf.3p.html
     Fn signature: int snprintf(char *restrict s, size_t n, const char *restrict format, ...)
@@ -833,7 +1141,11 @@ fn snprintf[*T: AnyType](s: Pointer[c_char], n: c_size_t, format: Pointer[c_char
     ](s, n, format, args)
 
 
-fn sprintf[*T: AnyType](s: Pointer[c_char], format: Pointer[c_char], *args: *T) -> c_int:
+fn sprintf[*T: AnyType](
+    s: Pointer[c_char],
+    format: Pointer[c_char],
+    *args: *T
+) -> c_int:
     """libc POSIX `sprintf` function
     Reference: https://man7.org/linux/man-pages/man3/fprintf.3p.html
     Fn signature: int sprintf(char *restrict s, const char *restrict format, ...)
@@ -847,7 +1159,11 @@ fn sprintf[*T: AnyType](s: Pointer[c_char], format: Pointer[c_char], *args: *T) 
     ](s, format, args)
 
 
-fn fscanf[*T: AnyType](stream: Pointer[FILE], format: Pointer[c_char], *args: *T) -> c_int:
+fn fscanf[*T: AnyType](
+    stream: Pointer[FILE],
+    format: Pointer[c_char],
+    *args: *T
+) -> c_int:
     """libc POSIX `fscanf` function
     Reference: https://man7.org/linux/man-pages/man3/fscanf.3p.html
     Fn signature: int fscanf(FILE *restrict stream, const char *restrict format, ...)
@@ -875,7 +1191,11 @@ fn scanf[*T: AnyType](format: Pointer[c_char], *args: *T) -> c_int:
     ](format, args)
 
 
-fn sscanf[*T: AnyType](s: Pointer[c_char], format: Pointer[c_char], *args: *T) -> c_int:
+fn sscanf[*T: AnyType](
+    s: Pointer[c_char],
+    format: Pointer[c_char],
+    *args: *T
+) -> c_int:
     """libc POSIX `sscanf` function
     Reference: https://man7.org/linux/man-pages/man3/fscanf.3p.html
     Fn signature: int sscanf(const char *restrict s, const char *restrict format, ...)
@@ -889,7 +1209,12 @@ fn sscanf[*T: AnyType](s: Pointer[c_char], format: Pointer[c_char], *args: *T) -
     ](s, format, args)
     
 
-fn fread(ptr: Pointer[c_void], size: c_size_t, nitems: c_size_t, stream: Pointer[FILE]) -> c_int:
+fn fread(
+    ptr: Pointer[c_void],
+    size: c_size_t,
+    nitems: c_size_t,
+    stream: Pointer[FILE]
+) -> c_int:
     """libc POSIX `fread` function
     Reference: https://man7.org/linux/man-pages/man3/fread.3p.html
     Fn signature: size_t fread(void *restrict ptr, size_t size, size_t nitems, FILE *restrict stream)
@@ -914,7 +1239,31 @@ fn rewind(stream: Pointer[FILE]) -> c_void:
     return external_call["rewind", c_void, Pointer[FILE]](stream)
 
 
-fn pread(fildes: c_int, buf: Pointer[c_void], nbyte: c_size_t, offset: off_t) -> c_int:
+fn getline(
+    lineptr: Pointer[Pointer[FILE]],
+    n: Pointer[c_size_t],
+    stream: Pointer[FILE]
+) -> c_ssize_t:
+    """libc POSIX `getline` function
+    Reference: https://man7.org/linux/man-pages/man3/getline.3p.html
+    Fn signature: ssize_t getline(char **restrict lineptr, size_t *restrict n, FILE *restrict stream);
+
+
+    Args:
+    Returns:
+    """
+    return external_call[
+        "getline", c_ssize_t,  # FnName, RetType
+        Pointer[Pointer[FILE]], Pointer[c_size_t], Pointer[FILE] # Args
+    ](lineptr, n, stream)
+
+
+fn pread(
+    fildes: c_int, 
+    buf: Pointer[c_void], 
+    nbyte: c_size_t, 
+    offset: off_t
+) -> c_int:
     """libc POSIX `pread` function
     Reference: https://man7.org/linux/man-pages/man3/read.3p.html
     Fn signature: ssize_t pread(int fildes, void *buf, size_t nbyte, off_t offset)
@@ -942,7 +1291,12 @@ fn read(fildes: c_int, buf: Pointer[c_void], nbyte: c_size_t) -> c_int:
     ](fildes, buf, nbyte)
 
 
-fn pwrite(fildes: c_int, buf: Pointer[c_void], nbyte: c_size_t, offset: off_t) -> c_int:
+fn pwrite(
+    fildes: c_int,
+    buf: Pointer[c_void],
+    nbyte: c_size_t,
+    offset: off_t
+) -> c_int:
     """libc POSIX `pwrite` function
     Reference: https://man7.org/linux/man-pages/man3/write.3p.html
     Fn signature: ssize_t pwrite(int fildes, const void *buf, size_t nbyte, off_t offset)
@@ -1064,30 +1418,195 @@ fn ioctl[*T: AnyType](fildes: c_int, request: c_int, *args: *T) -> c_int:
     ](fildes, request, args)
 
 
-fn test_socket(ip: String, port: Int):
-    var hints = addrinfo.zerod()
+# --- ( Logging Syscalls ) -----------------------------------------------------
+alias LOG_PID = -1
+alias LOG_CONS = -1
+alias LOG_NDELAY = -1
+alias LOG_ODELAY = -1
+alias LOG_NOWAIT = -1
+alias LOG_KERN = -1
+alias LOG_USER = -1
+alias LOG_MAIL = -1
+alias LOG_NEWS = -1
+alias LOG_UUCP = -1
+alias LOG_DAEMON = -1
+alias LOG_AUTH = -1
+alias LOG_CRON = -1
+alias LOG_LPR = -1
+alias LOG_LOCAL0 = -1
+alias LOG_LOCAL1 = -1
+alias LOG_LOCAL2 = -1
+alias LOG_LOCAL3 = -1
+alias LOG_LOCAL4 = -1
+alias LOG_LOCAL5 = -1
+alias LOG_LOCAL6 = -1
+alias LOG_LOCAL7 = -1
+alias LOG_MASK = -1 # (pri)
+alias LOG_EMERG = -1
+alias LOG_ALERT = -1
+alias LOG_CRIT = -1
+alias LOG_ERR = -1
+alias LOG_WARNING = -1
+alias LOG_NOTICE = -1
+alias LOG_INFO = -1
+alias LOG_DEBUG = -1
+
+fn openlog(ident: Pointer[c_char], logopt: c_int, facility: c_int) -> c_void:
+    """libc POSIX `openlog` function
+    Reference: https://man7.org/linux/man-pages/man3/closelog.3p.html
+    Fn signature: void openlog(const char *ident, int logopt, int facility)
+
+    Args:
+    Returns:
+    """
+    return external_call[
+        "openlog", c_void, # FnName, RetType
+        Pointer[c_char], c_int, c_int # Args
+    ](ident, logopt, facility)
+    
+
+fn syslog[*T: AnyType](
+    priority: c_int,
+    message: Pointer[c_char],
+    *args: *T
+) -> c_void:
+    """libc POSIX `syslog` function
+    Reference: https://man7.org/linux/man-pages/man3/closelog.3p.html
+    Fn signature: void syslog(int priority, const char *message, ... /* arguments */)
+
+    Args:
+    Returns:
+    """
+    return external_call[
+        "syslog", c_void, # FnName, RetType
+        c_int, Pointer[c_char] # Args
+    ](priority, message, args)
+
+    
+fn setlogmask(maskpri: c_int) -> c_int:
+    """libc POSIX `setlogmask` function
+    Reference: https://man7.org/linux/man-pages/man3/closelog.3p.html
+    Fn signature:  int setlogmask(int maskpri)
+
+    Args:
+    Returns:
+    """
+    return external_call[
+        "setlogmask", c_int, # FnName, RetType
+        c_int # Args
+    ](maskpri)
+
+    
+fn closelog(ident: Pointer[c_char], logopt: c_int, facility: c_int) -> c_void:
+    """libc POSIX `closelog` function
+    Reference: https://man7.org/linux/man-pages/man3/closelog.3p.html
+    Fn signature: void closelog(void)
+
+    Args:
+    Returns:
+    """
+    return external_call[
+        "closelog", c_void, # FnName, RetType
+        c_void # Args
+    ]()
+
+
+# --- ( Testing Functions ) ----------------------------------------------------
+
+fn __test_getaddrinfo__():
+    let ip_addr = "127.0.0.1"
+    let port = 8083
+    
+    var servinfo = Pointer[addrinfo]().alloc(1)
+    servinfo.store(addrinfo())
+    
+    var hints = addrinfo()
     hints.ai_family = AF_INET
     hints.ai_socktype = SOCK_STREAM
     hints.ai_flags = AI_PASSIVE
-    
-    let res = Pointer[addrinfo]()
-    let ipstr = Pointer[UI8]().alloc(INET6_ADDRSTRLEN)
-    # let hints_ptr = Pointer[addrinfo].address_of(hints)
+    #let hints_ptr = 
 
-    let status = getaddrinfo(StringRef("www.example.net"), "3490", hints, res);
-    print("Status: ", status)
-    
-    var ipver = "IPv6"
-    var addr: AnyType = Pointer[AnyType]()
-    var res_addrinfo = res.load()
-    if res_addrinfo.ai_family == AF_INET:
-        ipver = "IPv4: "
-        addr = Pointer[sockaddr_in].address_of(res_addrinfo.ai_addr).sin_addr
-    else:
-        addr = Pointer[sockaddr_in6].address_of(res_addrinfo.ai_addr).sin6_addr
+    let status = getaddrinfo(to_char_ptr(ip_addr), Pointer[UI8](), Pointer.address_of(hints), Pointer.address_of(servinfo))
+    let msg_ptr = gai_strerror(c_int(status))
+    _ = external_call["printf", c_int, Pointer[c_char],  Pointer[c_char]](to_char_ptr("gai_strerror: %s"), msg_ptr)
+    let msg = c_charptr_to_string(msg_ptr)
+    _printf("getaddrinfo satus: %d", msg)     
+    #getaddrinfo()
 
-    # convert the IP to a string and print it:
-    #var ipstr = Pointer[StringRef]()
-    inet_ntop(res_addrinfo.ai_family, addr, ipstr, sizeof(ipstr))
-    print("Ver: ", ipver, " - IP: ", ipstr)
-    #let sockfd = socket(AF_INET, SOCK_STREAM, 0)
+
+fn __test_socket__() raises:
+    let ip_addr = "127.0.0.1"
+    let port = 8083
+    
+    let address_family = AF_INET
+    var ip_buf_size = 4
+    if address_family == AF_INET6:
+        ip_buf_size = 16
+    
+    let ip_buf = Pointer[c_void].alloc(ip_buf_size)
+    let conv_status = inet_pton(address_family, to_char_ptr(ip_addr), ip_buf)
+    let raw_ip = ip_buf.bitcast[c_uint]().load()
+    
+    _printf("inet_pton: %d :: status: %d", raw_ip, conv_status) 
+    
+    let bin_port = htons(UI16(port))
+    _printf("htons: %d", bin_port) 
+
+    var ai = sockaddr_in(address_family, bin_port, raw_ip, StaticArray[8, c_char]())
+    let ai_ptr = Pointer[sockaddr_in].address_of(ai).bitcast[sockaddr]()
+    
+    let sockfd = socket(address_family, SOCK_STREAM, 0)
+    if sockfd == -1:
+        print("Socket creation error")
+    _printf("sockfd: %d", sockfd)
+    
+    var yes: Int = 1
+    if setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, Pointer[Int].address_of(yes).bitcast[c_void](), sizeof[Int]()) == -1:
+        print("set socket options failed")
+
+    if bind(sockfd, ai_ptr, sizeof[sockaddr_in]()) == -1:
+        # close(sockfd)
+        _ = shutdown(sockfd, SHUT_RDWR)
+        print("Binding socket failed")
+    
+    if listen(sockfd, c_int(128)) == -1:
+        _printf("Listen %d failed.", sockfd)
+    
+    
+    _printf("server: started at %s : %d with fd %d – waiting for connections...\n", ip_addr, port, sockfd)
+
+    let their_addr_ptr = Pointer[sockaddr].alloc(1)
+    var sin_size = socklen_t(sizeof[socklen_t]())
+    let new_sockfd = accept(sockfd, their_addr_ptr, Pointer[socklen_t].address_of(sin_size))
+    if new_sockfd == -1:
+        print("Accept failed")
+        # close(sockfd)
+        _ = shutdown(sockfd, SHUT_RDWR)
+
+    # inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
+    # printf("server: got connection from %s\n", s);
+    
+    let msg = "Hello, Mojo!"
+    if send(new_sockfd, to_char_ptr(msg).bitcast[c_void](), len(msg), 0) == -1:
+        print("Failed to send response")
+    print("Message sent succesfully")
+        # close(new_fd)
+    _ = shutdown(sockfd, SHUT_RDWR)
+    # close(new_fd)
+        
+
+fn __test_file__():
+    var fp = fopen(to_char_ptr("test.mojo"), to_char_ptr("r"))
+
+    let buf_size = 1024
+    var buf = Pointer[UI8]().alloc(buf_size) # .bitcast[c_void]()
+    var status = fread(buf.bitcast[c_void](), buf_size, 1, fp)
+
+    print(String(buf.bitcast[SI8](), buf_size))
+
+    fclose(fp)
+
+
+# __test_getaddrinfo__()
+# __test_socket__()
+# __test_file__()
