@@ -2,7 +2,7 @@ from DType import DType
 from Intrinsics import external_call
 from Memory import memset, memset_zero
 from Pointer import Pointer
-from SIMD import SIMD
+from SIMD import SIMD, UInt16
 from StaticTuple import StaticTuple as StaticArray
 from String import String, chr, ord
 from TargetInfo import sizeof
@@ -11,26 +11,26 @@ from IO import _printf
 
 
 # Types aliases
-alias c_void = UI8 
-alias c_char = UI8
-alias c_schar = SI8
-alias c_uchar = UI8
-alias c_short = SI16
-alias c_ushort = UI16
-alias c_int = SI32
-alias c_uint = UI32 
-alias c_long = SI64
-alias c_ulong = UI64
-alias c_float = F32
-alias c_double = F64
+alias c_void = UInt8 
+alias c_char = UInt8
+alias c_schar = Int8
+alias c_uchar = UInt8
+alias c_short = Int16
+alias c_ushort = UInt16
+alias c_int = Int32
+alias c_uint = UInt32 
+alias c_long = Int64
+alias c_ulong = UInt64
+alias c_float = Float32
+alias c_double = Float64
 
 # Note: `Int` is known to be machine's width 
 alias c_size_t = Int;
 alias c_ssize_t = Int;
 
-alias ptrdiff_t = SI64;
-alias intptr_t = SI64;
-alias uintptr_t = UI64;
+alias ptrdiff_t = Int64;
+alias intptr_t = Int64;
+alias uintptr_t = UInt64;
 
 
 # --- ( error.h Constants )-----------------------------------------------------
@@ -80,7 +80,7 @@ fn to_char_ptr(s: String) -> Pointer[c_char]:
 
 
 fn c_charptr_to_string(s: Pointer[c_char]) -> String:
-    return String(s.bitcast[SI8](), strlen(s))
+    return String(s.bitcast[Int8](), strlen(s))
 
 
 #fn cftob(val: c_int) -> Bool:
@@ -89,7 +89,7 @@ fn c_charptr_to_string(s: Pointer[c_char]) -> String:
 
 
 @always_inline("nodebug")
-fn external_call[
+fn external_call6[
     callee: StringLiteral,
     type: AnyType,
     T0: AnyType,
@@ -639,7 +639,7 @@ fn recvfrom(
     Reference: https://man7.org/linux/man-pages/man3/recvfrom.3p.html
     Fn signature: ssize_t recvfrom(int socket, void *restrict buffer, size_t length, int flags, struct sockaddr *restrict address, socklen_t *restrict address_len)
     """
-    return external_call[
+    return external_call6[
         "recvfrom", c_ssize_t, # FnName, RetType
         c_int, Pointer[c_void], c_size_t, c_int, Pointer[sockaddr], # Args 
         Pointer[socklen_t] # Args
@@ -680,7 +680,7 @@ fn sendto(
     Args:
     Returns:
     """
-    return external_call[
+    return external_call6[
         "sendto", c_ssize_t, # FnName, RetType
         c_int, Pointer[c_void], c_size_t, c_int, Pointer[sockaddr], socklen_t # Args
     ](socket, message, length, flags, dest_addr, dest_len)
@@ -748,8 +748,8 @@ fn inet_pton(address_family: Int, address: String) -> Int:
     
 
 # --- ( File Related Syscalls & Structs )---------------------------------------
-alias off_t = SI64
-alias mode_t = UI32
+alias off_t = Int64
+alias mode_t = UInt32
 
 alias FM_READ = 'r'
 alias FM_WRITE = 'w'
@@ -1497,7 +1497,7 @@ fn setlogmask(maskpri: c_int) -> c_int:
     ](maskpri)
 
     
-fn closelog(ident: Pointer[c_char], logopt: c_int, facility: c_int) -> c_void:
+fn closelog():
     """libc POSIX `closelog` function
     Reference: https://man7.org/linux/man-pages/man3/closelog.3p.html
     Fn signature: void closelog(void)
@@ -1505,10 +1505,7 @@ fn closelog(ident: Pointer[c_char], logopt: c_int, facility: c_int) -> c_void:
     Args:
     Returns:
     """
-    return external_call[
-        "closelog", c_void, # FnName, RetType
-        c_void # Args
-    ]()
+    _ = external_call["closelog", c_void]()
 
 
 # --- ( Testing Functions ) ----------------------------------------------------
@@ -1526,7 +1523,7 @@ fn __test_getaddrinfo__():
     hints.ai_flags = AI_PASSIVE
     #let hints_ptr = 
 
-    let status = getaddrinfo(to_char_ptr(ip_addr), Pointer[UI8](), Pointer.address_of(hints), Pointer.address_of(servinfo))
+    let status = getaddrinfo(to_char_ptr(ip_addr), Pointer[UInt8](), Pointer.address_of(hints), Pointer.address_of(servinfo))
     let msg_ptr = gai_strerror(c_int(status))
     _ = external_call["printf", c_int, Pointer[c_char],  Pointer[c_char]](to_char_ptr("gai_strerror: %s"), msg_ptr)
     let msg = c_charptr_to_string(msg_ptr)
@@ -1534,7 +1531,48 @@ fn __test_getaddrinfo__():
     #getaddrinfo()
 
 
-fn __test_socket__() raises:
+fn __test_socket_client__():
+    let ip_addr = "127.0.0.1" # The server's hostname or IP address
+    let port = 8083 # The port used by the server
+    let address_family = AF_INET
+    
+    let ip_buf = Pointer[c_void].alloc(4)
+    let conv_status = inet_pton(address_family, to_char_ptr(ip_addr), ip_buf)
+    let raw_ip = ip_buf.bitcast[c_uint]().load()
+    
+    _printf("inet_pton: %d :: status: %d\n", raw_ip, conv_status) 
+    
+    let bin_port = htons(UInt16(port))
+    _printf("htons: %d\n", bin_port) 
+
+    var ai = sockaddr_in(address_family, bin_port, raw_ip, StaticArray[8, c_char]())
+    let ai_ptr = Pointer[sockaddr_in].address_of(ai).bitcast[sockaddr]()
+    
+    let sockfd = socket(address_family, SOCK_STREAM, 0)
+    if sockfd == -1:
+        print("Socket creation error")
+    _printf("sockfd: %d\n", sockfd)
+    
+    if connect(sockfd, ai_ptr, sizeof[sockaddr_in]()) == -1:
+        _ = shutdown(sockfd, SHUT_RDWR)
+    
+    let msg = to_char_ptr("Hello, world Server")
+    let bytes_sent = send(sockfd, msg, strlen(msg), 0)
+    if bytes_sent == -1:
+        _ = shutdown(sockfd, SHUT_RDWR)
+        _printf("failed to send message\n")
+        
+    let buf_size = 1024
+    var buf = Pointer[UInt8]().alloc(buf_size)
+    let bytes_recv = recv(sockfd, buf, buf_size, 0)
+    if bytes_recv == -1:
+        _ = shutdown(sockfd, SHUT_RDWR)
+        _printf("failed to receive message\n")
+    print("Recived Message: ")
+    print(String(buf.bitcast[Int8](), bytes_recv))
+
+    
+fn __test_socket_server__() raises:
     let ip_addr = "127.0.0.1"
     let port = 8083
     
@@ -1547,10 +1585,10 @@ fn __test_socket__() raises:
     let conv_status = inet_pton(address_family, to_char_ptr(ip_addr), ip_buf)
     let raw_ip = ip_buf.bitcast[c_uint]().load()
     
-    _printf("inet_pton: %d :: status: %d", raw_ip, conv_status) 
+    _printf("inet_pton: %d :: status: %d\n", raw_ip, conv_status) 
     
-    let bin_port = htons(UI16(port))
-    _printf("htons: %d", bin_port) 
+    let bin_port = htons(UInt16(port))
+    _printf("htons: %d\n", bin_port) 
 
     var ai = sockaddr_in(address_family, bin_port, raw_ip, StaticArray[8, c_char]())
     let ai_ptr = Pointer[sockaddr_in].address_of(ai).bitcast[sockaddr]()
@@ -1558,7 +1596,7 @@ fn __test_socket__() raises:
     let sockfd = socket(address_family, SOCK_STREAM, 0)
     if sockfd == -1:
         print("Socket creation error")
-    _printf("sockfd: %d", sockfd)
+    _printf("sockfd: %d\n", sockfd)
     
     var yes: Int = 1
     if setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, Pointer[Int].address_of(yes).bitcast[c_void](), sizeof[Int]()) == -1:
@@ -1570,7 +1608,7 @@ fn __test_socket__() raises:
         print("Binding socket failed")
     
     if listen(sockfd, c_int(128)) == -1:
-        _printf("Listen %d failed.", sockfd)
+        _printf("Listen %d failed.\n", sockfd)
     
     
     _printf("server: started at %s : %d with fd %d – waiting for connections...\n", ip_addr, port, sockfd)
@@ -1596,17 +1634,18 @@ fn __test_socket__() raises:
         
 
 fn __test_file__():
-    var fp = fopen(to_char_ptr("test.mojo"), to_char_ptr("r"))
+    let fp = fopen(to_char_ptr("test.mojo"), to_char_ptr("r"))
 
     let buf_size = 1024
-    var buf = Pointer[UI8]().alloc(buf_size) # .bitcast[c_void]()
-    var status = fread(buf.bitcast[c_void](), buf_size, 1, fp)
+    var buf = Pointer[UInt8]().alloc(buf_size)
+    let status = fread(buf.bitcast[c_void](), buf_size, 1, fp)
 
-    print(String(buf.bitcast[SI8](), buf_size))
+    print(String(buf.bitcast[Int8](), buf_size))
 
-    fclose(fp)
+    _ = fclose(fp)
 
 
 # __test_getaddrinfo__()
-# __test_socket__()
+# __test_socket_client__()
+# __test_socket_server__()
 # __test_file__()
