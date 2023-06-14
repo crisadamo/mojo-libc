@@ -2,9 +2,9 @@
 
 > Note: its a work in progress. Variadic syscall not working at the moment.
 
-### Supported Functionality
-#### Basic socket connections
-Example [here](https://github.com/crisadamo/mojo-libc/blob/main/Libc.mojo#L1537)
+## Supported Functionality
+### Basic socket connections
+Example for [server](https://github.com/crisadamo/mojo-libc/blob/main/Libc.mojo#L1575) and [client](https://github.com/crisadamo/mojo-libc/blob/main/Libc.mojo#L1534)
 
 > Note: `getaddrinfo` is not working properly.
 
@@ -15,7 +15,7 @@ To test the socket functionality there are two functions:
 In order to test it you need to create two notebooks, on the first one you need to run the `__test_socket_server__()` and the on the other one run `__test_socket_client__()`.
 
 
-#### Basic file system operations
-Example [here](https://github.com/crisadamo/mojo-libc/blob/main/Libc.mojo#L1598)
+### Basic file system operations
+Example [here](https://github.com/crisadamo/mojo-libc/blob/main/Libc.mojo#L1636)
 
 To test it you can play around with the `__test_file__` function.
