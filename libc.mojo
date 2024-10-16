@@ -1,7 +1,7 @@
-from utils import StaticTuple
+from memory import memcpy, Reference, UnsafePointer
 from sys.ffi import external_call
 from sys.info import sizeof
-from memory import memcpy, Reference, UnsafePointer
+from utils import StaticTuple
 
 alias IPPROTO_IPV6 = 41
 alias IPV6_V6ONLY = 26
