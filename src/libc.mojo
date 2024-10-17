@@ -78,7 +78,6 @@ alias EDOM = 33
 alias ERANGE = 34
 alias EWOULDBLOCK = EAGAIN
 
-alias Byte = UInt8
 alias Bytes = List[Byte, True]
 
 
