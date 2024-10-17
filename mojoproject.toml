@@ -1,5 +1,5 @@
 [project]
-authors = ["Manuel Saelices <msaelices@gmail.com>"]
+authors = ["Cristian Adamo"]
 channels = ["conda-forge", "https://conda.modular.com/max-nightly"]
 description = "Add a short description here"
 name = "mojo-libc"
