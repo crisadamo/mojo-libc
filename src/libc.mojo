@@ -83,9 +83,11 @@ alias Bytes = List[Byte, True]
 
 fn to_char_ptr(s: String) -> UnsafePointer[c_char]:
     """Only ASCII-based strings."""
-    var ptr = UnsafePointer[c_char]().alloc(len(s))
+    var ptr = UnsafePointer[c_char]().alloc(len(s) + 1)
     for i in range(len(s)):
         ptr[i] = ord(s[i])
+    # Null-terminate the string
+    ptr[len(s)] = 0
     return ptr
 
 
@@ -97,7 +99,7 @@ fn to_char_ptr(s: Bytes) -> UnsafePointer[c_char]:
 
 
 fn c_charptr_to_string(s: UnsafePointer[c_char]) -> String:
-    return String(s.bitcast[UInt8](), strlen(s))
+    return String(s.bitcast[Byte](), strlen(s))
 
 
 fn cftob(val: c_int) -> Bool:
