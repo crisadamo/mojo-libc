@@ -1,4 +1,4 @@
-from memory import memcpy, Reference, UnsafePointer
+from memory import memcpy, Pointer, UnsafePointer
 from sys.ffi import external_call
 from sys.info import sizeof
 from utils import StaticTuple
@@ -546,6 +546,7 @@ fn setsockopt(
         socklen_t,  # Args
     ](socket, level, option_name, option_value, option_len)
 
+
 fn fcntl(fd: c_int, cmd: c_int, arg: c_int = 0) -> c_int:
     """Libc POSIX `fcntl` function
     Reference: https
@@ -557,6 +558,7 @@ fn fcntl(fd: c_int, cmd: c_int, arg: c_int = 0) -> c_int:
     Returns: The result of the command.
     """
     return external_call["fcntl", c_int, c_int, c_int, c_int](fd, cmd, arg)
+
 
 fn getsockopt(
     socket: c_int,
@@ -585,6 +587,7 @@ fn getsockopt(
         UnsafePointer[c_void],
         UnsafePointer[socklen_t],  # Args
     ](socket, level, option_name, option_value, option_len)
+
 
 fn getsockname(
     socket: c_int,
@@ -639,9 +642,9 @@ fn bind(
     Reference: https://man7.org/linux/man-pages/man3/bind.3p.html
     Fn signature: int bind(int socket, const struct sockaddr *address, socklen_t address_len).
     """
-    return external_call[
-        "bind", c_int, c_int, UnsafePointer[sockaddr], socklen_t
-    ](socket, address, address_len)
+    return external_call["bind", c_int, c_int, UnsafePointer[sockaddr], socklen_t](
+        socket, address, address_len
+    )
 
 
 fn listen(socket: c_int, backlog: c_int) -> c_int:
@@ -679,9 +682,7 @@ fn accept(
     ](socket, address, address_len)
 
 
-fn connect(
-    socket: c_int, address: Reference[sockaddr], address_len: socklen_t
-) -> c_int:
+fn connect(socket: c_int, address: Pointer[sockaddr], address_len: socklen_t) -> c_int:
     """Libc POSIX `connect` function
     Reference: https://man7.org/linux/man-pages/man3/connect.3p.html
     Fn signature: int connect(int socket, const struct sockaddr *address, socklen_t address_len).
@@ -739,9 +740,7 @@ fn shutdown(socket: c_int, how: c_int) -> c_int:
         how: How to shutdown the socket.
     Returns: 0 on success, -1 on error.
     """
-    return external_call[
-        "shutdown", c_int, c_int, c_int
-    ](  # FnName, RetType  # Args
+    return external_call["shutdown", c_int, c_int, c_int](  # FnName, RetType  # Args
         socket, how
     )
 
@@ -812,9 +811,7 @@ fn close(fildes: c_int) -> c_int:
     return external_call["close", c_int, c_int](fildes)
 
 
-fn open[
-    *T: AnyType
-](path: UnsafePointer[c_char], oflag: c_int, *args: *T) -> c_int:
+fn open[*T: AnyType](path: UnsafePointer[c_char], oflag: c_int, *args: *T) -> c_int:
     """Libc POSIX `open` function
     Reference: https://man7.org/linux/man-pages/man3/open.3p.html
     Fn signature: int open(const char *path, int oflag, ...).
@@ -854,9 +851,9 @@ fn read(fildes: c_int, buf: UnsafePointer[c_void], nbyte: c_size_t) -> c_int:
         nbyte: The number of bytes to read.
     Returns: The number of bytes read or -1 in case of failure.
     """
-    return external_call[
-        "read", c_ssize_t, c_int, UnsafePointer[c_void], c_size_t
-    ](fildes, buf, nbyte)
+    return external_call["read", c_ssize_t, c_int, UnsafePointer[c_void], c_size_t](
+        fildes, buf, nbyte
+    )
 
 
 fn write(fildes: c_int, buf: UnsafePointer[c_void], nbyte: c_size_t) -> c_int:
@@ -869,9 +866,9 @@ fn write(fildes: c_int, buf: UnsafePointer[c_void], nbyte: c_size_t) -> c_int:
         nbyte: The number of bytes to write.
     Returns: The number of bytes written or -1 in case of failure.
     """
-    return external_call[
-        "write", c_ssize_t, c_int, UnsafePointer[c_void], c_size_t
-    ](fildes, buf, nbyte)
+    return external_call["write", c_ssize_t, c_int, UnsafePointer[c_void], c_size_t](
+        fildes, buf, nbyte
+    )
 
 
 struct timeval:
@@ -881,6 +878,7 @@ struct timeval:
     fn __init__(inout self, seconds: Int64, microseconds: Int64):
         self.tv_sec = seconds
         self.tv_usec = microseconds
+
 
 @value
 struct fd_set:
@@ -894,7 +892,7 @@ struct fd_set:
     fn set(inout self, fd: Int):
         var word = fd // 64
         var bit = fd % 64
-        self.fds_bits[word] |= (1 << bit)
+        self.fds_bits[word] |= 1 << bit
 
     fn clear(inout self, fd: Int):
         var word = fd // 64
@@ -926,7 +924,7 @@ fn select(
     """Libc POSIX `select` function
     Reference: https://man7.org/linux
     Fn signature: int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout).
-    
+
     Args: nfds: The highest-numbered file descriptor in any of the three sets, plus 1.
         readfds: A UnsafePointer to the set of file descriptors to read from.
         writefds: A UnsafePointer to the set of file descriptors to write to.
@@ -943,6 +941,7 @@ fn select(
         UnsafePointer[fd_set],
         UnsafePointer[timeval],  # Args
     ](nfds, readfds, writefds, exceptfds, timeout)
+
 
 fn __test_getaddrinfo__():
     var ip_addr = "127.0.0.1"
@@ -963,8 +962,8 @@ fn __test_getaddrinfo__():
         UnsafePointer.address_of(servinfo),
     )
     var msg_ptr = gai_strerror(c_int(status))
-    _ = external_call[
-        "printf", c_int, UnsafePointer[c_char], UnsafePointer[c_char]
-    ](to_char_ptr("gai_strerror: %s"), msg_ptr)
+    _ = external_call["printf", c_int, UnsafePointer[c_char], UnsafePointer[c_char]](
+        to_char_ptr("gai_strerror: %s"), msg_ptr
+    )
     var msg = c_charptr_to_string(msg_ptr)
     print("getaddrinfo satus: " + msg)
