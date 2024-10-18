@@ -4,9 +4,6 @@
 
 ## Supported Functionality
 ### Basic socket connections
-Example for [server](https://github.com/crisadamo/mojo-libc/blob/main/Libc.mojo#L1575) and [client](https://github.com/crisadamo/mojo-libc/blob/main/Libc.mojo#L1534)
-
-> Note: `getaddrinfo` is not working properly.
 
 To test the socket functionality there are two functions:
 - `__test_socket_server__` that start listening for connections on 127.0.0.1:8083 and once a client connects it send the `"Hello, Mojo!"` message.
