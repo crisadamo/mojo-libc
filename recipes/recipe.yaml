@@ -13,7 +13,7 @@ source:
 
 build:
   script:
-    - magic run mojo package . -o ${PREFIX}/libc.mojopkg
+    - magic run mojo package libc -o ${PREFIX}/libc.mojopkg
 
 requirements:
   run:
