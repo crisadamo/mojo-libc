@@ -1,5 +1,12 @@
 from memory import memcpy, Pointer, UnsafePointer
-from sys.ffi import external_call
+from sys.ffi import (
+    c_char,
+    c_int,
+    c_long,
+    c_uint,
+    external_call,
+    OpaquePointer,
+)
 from sys.info import sizeof
 from utils import StaticTuple
 
@@ -21,14 +28,10 @@ alias char_UnsafePointer = UnsafePointer[c_char]
 # Adapted from https://github.com/crisadamo/mojo-Libc . Huge thanks to Cristian!
 # C types
 alias c_void = UInt8
-alias c_char = UInt8
 alias c_schar = Int8
 alias c_uchar = UInt8
 alias c_short = Int16
 alias c_ushort = UInt16
-alias c_int = Int32
-alias c_uint = UInt32
-alias c_long = Int64
 alias c_ulong = UInt64
 alias c_float = Float32
 alias c_double = Float64
@@ -79,27 +82,6 @@ alias ERANGE = 34
 alias EWOULDBLOCK = EAGAIN
 
 alias Bytes = List[Byte, True]
-
-
-fn to_char_ptr(s: String) -> UnsafePointer[c_char]:
-    """Only ASCII-based strings."""
-    var ptr = UnsafePointer[c_char]().alloc(len(s) + 1)
-    for i in range(len(s)):
-        ptr[i] = ord(s[i])
-    # Null-terminate the string
-    ptr[len(s)] = 0
-    return ptr
-
-
-fn to_char_ptr(s: Bytes) -> UnsafePointer[c_char]:
-    var ptr = UnsafePointer[c_char]().alloc(len(s))
-    for i in range(len(s)):
-        ptr[i] = int(s[i])
-    return ptr
-
-
-fn c_charptr_to_string(s: UnsafePointer[c_char]) -> String:
-    return String(s.bitcast[Byte](), strlen(s))
 
 
 fn cftob(val: c_int) -> Bool:
@@ -462,7 +444,7 @@ fn inet_ntop(
 
 
 fn inet_pton(
-    af: c_int, src: UnsafePointer[c_char], dst: UnsafePointer[c_void]
+    af: c_int, src: UnsafePointer[c_char], dst: UnsafePointer[in_addr]
 ) -> c_int:
     """Libc POSIX `inet_pton` function
     Reference: https://man7.org/linux/man-pages/man3/inet_ntop.3p.html
@@ -478,7 +460,7 @@ fn inet_pton(
         c_int,
         c_int,
         UnsafePointer[c_char],
-        UnsafePointer[c_void],
+        UnsafePointer[in_addr],
     ](af, src, dst)
 
 
@@ -784,11 +766,9 @@ fn inet_pton(address_family: Int, address: String) -> Int:
     if address_family == AF_INET6:
         ip_buf_size = 16
 
-    var ip_buf = UnsafePointer[c_void].alloc(ip_buf_size)
-    var conv_status = inet_pton(
-        rebind[c_int](address_family), to_char_ptr(address), ip_buf
-    )
-    return int(ip_buf.bitcast[c_uint]())
+    var ip_buf = UnsafePointer[in_addr].alloc(ip_buf_size)
+    _ = inet_pton(address_family, address.unsafe_cstr_ptr(), ip_buf)
+    return int(ip_buf[].s_addr)
 
 
 # --- ( File Related Syscalls & Structs )---------------------------------------
@@ -942,29 +922,3 @@ fn select(
         UnsafePointer[fd_set],
         UnsafePointer[timeval],  # Args
     ](nfds, readfds, writefds, exceptfds, timeout)
-
-
-fn __test_getaddrinfo__():
-    var ip_addr = "127.0.0.1"
-    var port = 8083
-
-    var servinfo = UnsafePointer[addrinfo]().alloc(1)
-    servinfo[0] = addrinfo()
-
-    var hints = addrinfo()
-    hints.ai_family = AF_INET
-    hints.ai_socktype = SOCK_STREAM
-    hints.ai_flags = AI_PASSIVE
-
-    var status = getaddrinfo(
-        to_char_ptr(ip_addr),
-        UnsafePointer[UInt8](),
-        UnsafePointer.address_of(hints),
-        UnsafePointer.address_of(servinfo),
-    )
-    var msg_ptr = gai_strerror(c_int(status))
-    _ = external_call["printf", c_int, UnsafePointer[c_char], UnsafePointer[c_char]](
-        to_char_ptr("gai_strerror: %s"), msg_ptr
-    )
-    var msg = c_charptr_to_string(msg_ptr)
-    print("getaddrinfo satus: " + msg)
