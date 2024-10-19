@@ -15,4 +15,18 @@ In order to test it you need to create two notebooks, on the first one you need 
 ### Basic file system operations
 Example [here](https://github.com/crisadamo/mojo-libc/blob/main/Libc.mojo#L1636)
 
-To test it you can play around with the `__test_file__` function.
+## Building the project
+
+To build the project, execute the following command:
+
+```bash
+./scripts/build.sh
+```
+
+## Running the tests
+
+To run the tests, execute the following command:
+
+```bash
+./scripts/run-tests.sh
+```
