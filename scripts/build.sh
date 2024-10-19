@@ -1,4 +1,3 @@
 #!/bin/bash
 
-mojo package src/ -o libc.mojopkg
-
+mojo package src/libc -o libc.mojopkg
