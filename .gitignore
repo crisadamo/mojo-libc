@@ -3,3 +3,4 @@
 *.egg-info
 # magic environments
 .magic
+output
