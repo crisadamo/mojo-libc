@@ -1,3 +1,3 @@
 #!/bin/bash
 
-mojo test -I . tests/
+mojo test -I src/ tests/
