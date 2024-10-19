@@ -444,7 +444,7 @@ fn inet_ntop(
 
 
 fn inet_pton(
-    af: c_int, src: UnsafePointer[c_char], dst: UnsafePointer[in_addr]
+    af: c_int, src: UnsafePointer[c_char], dst: UnsafePointer[c_void]
 ) -> c_int:
     """Libc POSIX `inet_pton` function
     Reference: https://man7.org/linux/man-pages/man3/inet_ntop.3p.html
@@ -460,7 +460,7 @@ fn inet_pton(
         c_int,
         c_int,
         UnsafePointer[c_char],
-        UnsafePointer[in_addr],
+        UnsafePointer[c_void],
     ](af, src, dst)
 
 
@@ -766,9 +766,9 @@ fn inet_pton(address_family: Int, address: String) -> Int:
     if address_family == AF_INET6:
         ip_buf_size = 16
 
-    var ip_buf = UnsafePointer[in_addr].alloc(ip_buf_size)
+    var ip_buf = UnsafePointer[c_void].alloc(ip_buf_size)
     _ = inet_pton(address_family, address.unsafe_cstr_ptr(), ip_buf)
-    return int(ip_buf[].s_addr)
+    return int(ip_buf.bitcast[in_addr]()[].s_addr)
 
 
 # --- ( File Related Syscalls & Structs )---------------------------------------
