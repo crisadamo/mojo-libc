@@ -1,11 +1,11 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/prefix-dev/recipe-format/main/schema.json
 
 context:
-  version: "0.1.0"
+  version: "0.1.1"
 
 package:
   name: "libc"
-  version: 0.1.0
+  version: 0.1.1
 
 source:
   - path: ../src
