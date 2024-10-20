@@ -4,11 +4,11 @@
 
 ### Basic socket connections
 
-See the example in [examples/sockets/](examples/sockets/) directory.
+See the examples in [examples/sockets/](examples/sockets/) directory.
 
 ### Basic file system operations
 
-See the unit tests in the [tests/](tests/) directory.
+See the examples in [examples/files/](examples/files/) directory.
 
 ## Building the project
 
