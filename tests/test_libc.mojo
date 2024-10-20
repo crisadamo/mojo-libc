@@ -143,7 +143,6 @@ fn test_socket_close() raises:
 
 
 fn test_printf() raises:
-    # TODO: Not working because of variadic arguments issue
     var format_str = String("Hello, %s!\n")
     var format_ptr = format_str.unsafe_cstr_ptr()
     var name = String("world")
