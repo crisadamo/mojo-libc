@@ -666,7 +666,9 @@ fn accept(
     ](socket, address, address_len)
 
 
-fn connect(socket: c_int, address: Pointer[sockaddr], address_len: socklen_t) -> c_int:
+fn connect(
+    socket: c_int, address: UnsafePointer[sockaddr], address_len: socklen_t
+) -> c_int:
     """Libc POSIX `connect` function
     Reference: https://man7.org/linux/man-pages/man3/connect.3p.html
     Fn signature: int connect(int socket, const struct sockaddr *address, socklen_t address_len).
