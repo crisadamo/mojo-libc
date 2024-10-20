@@ -15,6 +15,7 @@ from libc import (
     gai_strerror,
     getaddrinfo,
     inet_pton,
+    sockaddr,
     strlen,
 )
 
@@ -42,7 +43,8 @@ fn test_getaddrinfo() raises:
     var addrinfo = servinfo[]
 
     var ai_addr = addrinfo.ai_addr
-    assert_not_equal(ai_addr, ai_addr, "ai_addr is null")
+    var null_ptr = UnsafePointer[sockaddr]()
+    assert_not_equal(ai_addr, null_ptr, "ai_addr is null")
 
 
 fn test_strlen() raises:
