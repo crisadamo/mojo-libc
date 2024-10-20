@@ -65,11 +65,3 @@ fn test_inet_pton() raises:
     var ip_str = String("127.0.0.1")
     var result = inet_pton(AF_INET, ip_str)
     assert_equal(result, 16777343, "inet_pton failed to convert IP address")
-
-
-fn run() raises:
-    # TOOD: Figure out why this test is failing
-    # test_getaddrinfo()
-    test_strlen()
-    test_cftob()
-    test_inet_pton()
