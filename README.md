@@ -1,15 +1,5 @@
 # Mojo's libc support
 
-## Supported Functionality
-
-### Basic socket connections
-
-See the examples in [examples/sockets/](examples/sockets/) directory.
-
-### Basic file system operations
-
-See the examples in [examples/files/](examples/files/) directory.
-
 ## Getting Started
 
 The only dependency for `libc` is Mojo.
@@ -34,6 +24,15 @@ Once you have created a Mojo project using the `magic` tool,
     from libc import socket
     ```
 
+## Supported Functionality
+
+### Basic socket connections
+
+See the examples in [examples/sockets/](examples/sockets/) directory.
+
+### Basic file system operations
+
+See the examples in [examples/files/](examples/files/) directory.
 ## Building the project
 
 To build the project, execute the following command:
