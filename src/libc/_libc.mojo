@@ -17,9 +17,10 @@ alias EPROTONOSUPPORT = 93
 
 # Adapted from https://github.com/gabrieldemarmiesse/mojo-stdlib-extensions/ . Huge thanks to Gabriel!
 
-alias FD_STDIN: c_int = 0
-alias FD_STDOUT: c_int = 1
-alias FD_STDERR: c_int = 2
+alias FD = c_int
+alias FD_STDIN: FD = 0
+alias FD_STDOUT: FD = 1
+alias FD_STDERR: FD = 2
 
 alias SUCCESS = 0
 alias GRND_NONBLOCK: UInt8 = 1
@@ -487,7 +488,7 @@ fn inet_ntoa(addr: in_addr) -> UnsafePointer[c_char]:
     return external_call["inet_ntoa", UnsafePointer[c_char], in_addr](addr)
 
 
-fn socket(domain: c_int, type: c_int, protocol: c_int) -> c_int:
+fn socket(domain: c_int, type: c_int, protocol: c_int) -> FD:
     """Libc POSIX `socket` function
     Reference: https://man7.org/linux/man-pages/man3/socket.3p.html
     Fn signature: int socket(int domain, int type, int protocol).
@@ -497,13 +498,13 @@ fn socket(domain: c_int, type: c_int, protocol: c_int) -> c_int:
         protocol: The protocol to use.
     Returns: A File Descriptor or -1 in case of failure.
     """
-    return external_call[
-        "socket", c_int, c_int, c_int, c_int  # FnName, RetType  # Args
-    ](domain, type, protocol)
+    return external_call["socket", FD, c_int, c_int, c_int](  # FnName, RetType  # Args
+        domain, type, protocol
+    )
 
 
 fn setsockopt(
-    socket: c_int,
+    socket: FD,
     level: c_int,
     option_name: c_int,
     option_value: UnsafePointer[c_void],
@@ -523,7 +524,7 @@ fn setsockopt(
     return external_call[
         "setsockopt",
         c_int,  # FnName, RetType
-        c_int,
+        FD,
         c_int,
         c_int,
         UnsafePointer[c_void],
@@ -531,7 +532,7 @@ fn setsockopt(
     ](socket, level, option_name, option_value, option_len)
 
 
-fn fcntl(fd: c_int, cmd: c_int, arg: c_int = 0) -> c_int:
+fn fcntl(fd: FD, cmd: c_int, arg: c_int = 0) -> c_int:
     """Libc POSIX `fcntl` function
     Reference: https
     Fn signature: int fcntl(int fd, int cmd, int arg).
@@ -541,11 +542,11 @@ fn fcntl(fd: c_int, cmd: c_int, arg: c_int = 0) -> c_int:
         arg: The argument for the command.
     Returns: The result of the command.
     """
-    return external_call["fcntl", c_int, c_int, c_int, c_int](fd, cmd, arg)
+    return external_call["fcntl", c_int, FD, c_int, c_int](fd, cmd, arg)
 
 
 fn getsockopt(
-    socket: c_int,
+    socket: FD,
     level: c_int,
     option_name: c_int,
     option_value: UnsafePointer[c_void],
@@ -565,7 +566,7 @@ fn getsockopt(
     return external_call[
         "getsockopt",
         c_int,  # FnName, RetType
-        c_int,
+        FD,
         c_int,
         c_int,
         UnsafePointer[c_void],
@@ -574,7 +575,7 @@ fn getsockopt(
 
 
 fn getsockname(
-    socket: c_int,
+    socket: FD,
     address: UnsafePointer[sockaddr],
     address_len: UnsafePointer[socklen_t],
 ) -> c_int:
@@ -590,14 +591,14 @@ fn getsockname(
     return external_call[
         "getsockname",
         c_int,  # FnName, RetType
-        c_int,
+        FD,
         UnsafePointer[sockaddr],
         UnsafePointer[socklen_t],  # Args
     ](socket, address, address_len)
 
 
 fn getpeername(
-    sockfd: c_int,
+    sockfd: FD,
     addr: UnsafePointer[sockaddr],
     address_len: UnsafePointer[socklen_t],
 ) -> c_int:
@@ -613,25 +614,23 @@ fn getpeername(
     return external_call[
         "getpeername",
         c_int,  # FnName, RetType
-        c_int,
+        FD,
         UnsafePointer[sockaddr],
         UnsafePointer[socklen_t],  # Args
     ](sockfd, addr, address_len)
 
 
-fn bind(
-    socket: c_int, address: UnsafePointer[sockaddr], address_len: socklen_t
-) -> c_int:
+fn bind(socket: FD, address: UnsafePointer[sockaddr], address_len: socklen_t) -> c_int:
     """Libc POSIX `bind` function
     Reference: https://man7.org/linux/man-pages/man3/bind.3p.html
     Fn signature: int bind(int socket, const struct sockaddr *address, socklen_t address_len).
     """
-    return external_call["bind", c_int, c_int, UnsafePointer[sockaddr], socklen_t](
+    return external_call["bind", c_int, FD, UnsafePointer[sockaddr], socklen_t](
         socket, address, address_len
     )
 
 
-fn listen(socket: c_int, backlog: c_int) -> c_int:
+fn listen(socket: FD, backlog: c_int) -> c_int:
     """Libc POSIX `listen` function
     Reference: https://man7.org/linux/man-pages/man3/listen.3p.html
     Fn signature: int listen(int socket, int backlog).
@@ -640,14 +639,14 @@ fn listen(socket: c_int, backlog: c_int) -> c_int:
         backlog: The maximum length of the queue of pending connections.
     Returns: 0 on success, -1 on error.
     """
-    return external_call["listen", c_int, c_int, c_int](socket, backlog)
+    return external_call["listen", c_int, FD, c_int](socket, backlog)
 
 
 fn accept(
-    socket: c_int,
+    socket: FD,
     address: UnsafePointer[sockaddr],
     address_len: UnsafePointer[socklen_t],
-) -> c_int:
+) -> FD:
     """Libc POSIX `accept` function
     Reference: https://man7.org/linux/man-pages/man3/accept.3p.html
     Fn signature: int accept(int socket, struct sockaddr *restrict address, socklen_t *restrict address_len).
@@ -660,14 +659,14 @@ fn accept(
     return external_call[
         "accept",
         c_int,  # FnName, RetType
-        c_int,
+        FD,
         UnsafePointer[sockaddr],
         UnsafePointer[socklen_t],  # Args
     ](socket, address, address_len)
 
 
 fn connect(
-    socket: c_int, address: UnsafePointer[sockaddr], address_len: socklen_t
+    socket: FD, address: UnsafePointer[sockaddr], address_len: socklen_t
 ) -> c_int:
     """Libc POSIX `connect` function
     Reference: https://man7.org/linux/man-pages/man3/connect.3p.html
@@ -678,11 +677,11 @@ fn connect(
         address_len: The size of the address.
     Returns: 0 on success, -1 on error.
     """
-    return external_call["connect", c_int](socket, address, address_len)
+    return external_call["connect", FD](socket, address, address_len)
 
 
 fn recv(
-    socket: c_int,
+    socket: FD,
     buffer: UnsafePointer[UInt8],
     length: c_size_t,
     flags: c_int,
@@ -694,7 +693,7 @@ fn recv(
     return external_call[
         "recv",
         c_ssize_t,  # FnName, RetType
-        c_int,
+        FD,
         UnsafePointer[UInt8],
         c_size_t,
         c_int,  # Args
@@ -702,7 +701,7 @@ fn recv(
 
 
 fn send(
-    socket: c_int, buffer: UnsafePointer[c_void], length: c_size_t, flags: c_int
+    socket: FD, buffer: UnsafePointer[c_void], length: c_size_t, flags: c_int
 ) -> c_ssize_t:
     """Libc POSIX `send` function
     Reference: https://man7.org/linux/man-pages/man3/send.3p.html
@@ -717,7 +716,7 @@ fn send(
     return external_call["send", c_ssize_t](socket, buffer, length, flags)
 
 
-fn shutdown(socket: c_int, how: c_int) -> c_int:
+fn shutdown(socket: FD, how: c_int) -> c_int:
     """Libc POSIX `shutdown` function
     Reference: https://man7.org/linux/man-pages/man3/shutdown.3p.html
     Fn signature: int shutdown(int socket, int how).
@@ -726,7 +725,7 @@ fn shutdown(socket: c_int, how: c_int) -> c_int:
         how: How to shutdown the socket.
     Returns: 0 on success, -1 on error.
     """
-    return external_call["shutdown", c_int, c_int, c_int](  # FnName, RetType  # Args
+    return external_call["shutdown", FD, c_int, c_int](  # FnName, RetType  # Args
         socket, how
     )
 
@@ -780,7 +779,7 @@ alias O_ACCMODE = 3
 alias O_CLOEXEC = 524288
 
 
-fn close(fildes: c_int) -> c_int:
+fn close(fildes: FD) -> c_int:
     """Libc POSIX `close` function
     Reference: https://man7.org/linux/man-pages/man3/close.3p.html
     Fn signature: int close(int fildes).
@@ -833,7 +832,7 @@ fn printf[*T: AnyType](format: UnsafePointer[c_char], *args: *T) -> c_int:
     ](format, loaded_pack)
 
 
-fn read(fildes: c_int, buf: UnsafePointer[c_void], nbyte: c_size_t) -> c_int:
+fn read(fildes: FD, buf: UnsafePointer[c_void], nbyte: c_size_t) -> c_int:
     """Libc POSIX `read` function
     Reference: https://man7.org/linux/man-pages/man3/read.3p.html
     Fn signature: sssize_t read(int fildes, void *buf, size_t nbyte).
@@ -843,12 +842,12 @@ fn read(fildes: c_int, buf: UnsafePointer[c_void], nbyte: c_size_t) -> c_int:
         nbyte: The number of bytes to read.
     Returns: The number of bytes read or -1 in case of failure.
     """
-    return external_call["read", c_ssize_t, c_int, UnsafePointer[c_void], c_size_t](
+    return external_call["read", c_ssize_t, FD, UnsafePointer[c_void], c_size_t](
         fildes, buf, nbyte
     )
 
 
-fn write(fildes: c_int, buf: UnsafePointer[c_void], nbyte: c_size_t) -> c_int:
+fn write(fildes: FD, buf: UnsafePointer[c_void], nbyte: c_size_t) -> c_int:
     """Libc POSIX `write` function
     Reference: https://man7.org/linux/man-pages/man3/write.3p.html
     Fn signature: ssize_t write(int fildes, const void *buf, size_t nbyte).
@@ -858,7 +857,7 @@ fn write(fildes: c_int, buf: UnsafePointer[c_void], nbyte: c_size_t) -> c_int:
         nbyte: The number of bytes to write.
     Returns: The number of bytes written or -1 in case of failure.
     """
-    return external_call["write", c_ssize_t, c_int, UnsafePointer[c_void], c_size_t](
+    return external_call["write", c_ssize_t, FD, UnsafePointer[c_void], c_size_t](
         fildes, buf, nbyte
     )
 
@@ -881,14 +880,14 @@ struct fd_set:
         for i in range(16):
             self.fds_bits[i] = 0
 
-    fn set(inout self, fd: Int):
-        var word = fd // 64
-        var bit = fd % 64
+    fn set(inout self, fd: FD):
+        var word = int(fd // 64)
+        var bit = int(fd % 64)
         self.fds_bits[word] |= 1 << bit
 
-    fn clear(inout self, fd: Int):
-        var word = fd // 64
-        var bit = fd % 64
+    fn clear(inout self, fd: FD):
+        var word = int(fd // 64)
+        var bit = int(fd % 64)
         self.fds_bits[word] &= ~(1 << bit)
 
     fn is_set(self, fd: Int) -> Bool:
