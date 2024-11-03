@@ -16,7 +16,7 @@ Once you have created a Mojo project using the `magic` tool,
 2. Add `libc` as a dependency:
    ```toml
    [dependencies]
-   libc = ">=0.1.3"
+   libc = ">=0.1.4"
    ```
 3. Run `magic install` at the root of your project, where `mojoproject.toml` is located
 4. `libc` should now be installed as a dependency. You can import libc functions from the library, e.g:
