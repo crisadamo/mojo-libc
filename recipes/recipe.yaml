@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/prefix-dev/recipe-format/main/schema.json
+
+context:
+  version: "0.1.4"
+
+package:
+  name: "libc"
+  version: 0.1.4
+
+source:
+  - path: ../src
+  - path: ../LICENSE
+
+build:
+  script:
+    - mkdir -p ${PREFIX}/lib/mojo
+    - magic run mojo package libc -o ${PREFIX}/lib/mojo/libc.mojopkg
+
+requirements:
+  run:
+    - max >=24.5.0
+
+about:
+  homepage: https://github.com/crisadamo/mojo-libc
+  license: MIT
+  license_file: LICENSE
+  summary: Mojo's libc support
+  repository: https://github.com/crisadamo/mojo-libc

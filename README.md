@@ -1,21 +1,50 @@
 # Mojo's libc support
 
-> Note: its a work in progress. Variadic syscall not working at the moment.
+## Getting Started
+
+The only dependency for `libc` is Mojo.
+
+You can install Mojo following the instructions from the [Modular website](https://www.modular.com/max/mojo).
+
+Once you have created a Mojo project using the `magic` tool,
+
+1. Add the `mojo-community` channel to your `mojoproject.toml`, e.g:
+   ```toml
+   [project]
+   channels = ["conda-forge", "https://conda.modular.com/max", "https://repo.prefix.dev/mojo-community"]
+   ```
+2. Add `libc` as a dependency:
+   ```toml
+   [dependencies]
+   libc = ">=0.1.4"
+   ```
+3. Run `magic install` at the root of your project, where `mojoproject.toml` is located
+4. `libc` should now be installed as a dependency. You can import libc functions from the library, e.g:
+    ```mojo
+    from libc import socket
+    ```
 
 ## Supported Functionality
+
 ### Basic socket connections
-Example for [server](https://github.com/crisadamo/mojo-libc/blob/main/Libc.mojo#L1575) and [client](https://github.com/crisadamo/mojo-libc/blob/main/Libc.mojo#L1534)
 
-> Note: `getaddrinfo` is not working properly.
-
-To test the socket functionality there are two functions:
-- `__test_socket_server__` that start listening for connections on 127.0.0.1:8083 and once a client connects it send the `"Hello, Mojo!"` message.
-- `__test_socket_client__` that connects to 127.0.0.1:8083 send the message `"Hello, world Server"` and prints the reply from the server.
-
-In order to test it you need to create two notebooks, on the first one you need to run the `__test_socket_server__()` and then on the second one run `__test_socket_client__()`.
-
+See the examples in [examples/sockets/](examples/sockets/) directory.
 
 ### Basic file system operations
-Example [here](https://github.com/crisadamo/mojo-libc/blob/main/Libc.mojo#L1636)
 
-To test it you can play around with the `__test_file__` function.
+See the examples in [examples/files/](examples/files/) directory.
+## Building the project
+
+To build the project, execute the following command:
+
+```bash
+./scripts/build.sh
+```
+
+## Running the tests
+
+To run the tests, execute the following command:
+
+```bash
+./scripts/run-tests.sh
+```
